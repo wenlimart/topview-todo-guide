@@ -1,280 +1,57 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { ROLES, CRITERIA } from "./data/roles.js";
+import { INITIAL_PHASES } from "./data/initial.js";
+import { WEEKLY_PHASES } from "./data/weekly.js";
+import { MONTHLY_PHASES } from "./data/monthly.js";
 
 /* ──────────────────────────────────────────────
-   ROLE DEFINITIONS
+   MODE DEFINITIONS
    ────────────────────────────────────────────── */
-const ROLES = {
-  director:  { label: "ディレクター",      color: "#6366f1", short: "D" },
-  research:  { label: "リサーチ担当",      color: "#0ea5e9", short: "R" },
-  analyst:   { label: "AI分析担当",        color: "#8b5cf6", short: "A" },
-  creator:   { label: "制作担当",          color: "#f59e0b", short: "C" },
-  marketer:  { label: "マーケ担当",        color: "#10b981", short: "M" },
-  approver:  { label: "責任者/クライアント", color: "#ef4444", short: "承" },
-};
-
-/* ──────────────────────────────────────────────
-   JUDGMENT CRITERIA
-   ────────────────────────────────────────────── */
-const CRITERIA = {
-  type_selection: {
-    title: "採用する型の判断基準",
-    items: [
-      "自社商品に自然に接続できる",
-      "ブランド毀損リスクが低い",
-      "冒頭1秒の強さがある",
-      "量産・横展開しやすい",
-      "検証したいKPIが明確",
-    ],
+const MODES = {
+  initial: {
+    key: "initial",
+    label: "初月PoC",
+    subtitle: "最初の1か月で検証体制を立ち上げる 7ステップ",
+    phases: INITIAL_PHASES,
+    hasWeek: false,
   },
-  win_criteria: {
-    title: "勝ち動画の判断基準",
-    items: [
-      "視聴維持率が平均より高い",
-      "保存率または共有率が高い",
-      "コメントで狙った反応が出ている",
-      "商品クリックやCVに近い行動が出ている",
-      "次の企画に展開できる学びがある",
-    ],
+  weekly: {
+    key: "weekly",
+    label: "週次運用",
+    subtitle: "毎週まわす検証サイクル — 月〜金 5ステップ",
+    phases: WEEKLY_PHASES,
+    hasWeek: true,
+  },
+  monthly: {
+    key: "monthly",
+    label: "月次レビュー",
+    subtitle: "1か月分の結果を整理し、勝ちパターンを蓄積する 4ステップ",
+    phases: MONTHLY_PHASES,
+    hasWeek: false,
   },
 };
-
-/* ──────────────────────────────────────────────
-   WEEKLY PHASE & TASK DATA
-   ────────────────────────────────────────────── */
-const PHASES = [
-  {
-    id: "phase1",
-    day: "月曜",
-    dayShort: "MON",
-    icon: "🔍",
-    title: "バズ動画を収集＋AI構造分析",
-    deliverable: "参考動画リスト＋構造分析シート（5本〜）",
-    deliverableKey: "link_phase1",
-    completionCriteria: "収集した動画すべてに5観点の構造分析が記録され、パターン分類が完了していること",
-    tasks: [
-      {
-        id: "1-1",
-        title: "バズ動画を収集する（5本〜）",
-        owners: ["research"],
-        detail: "TikTok・Instagram Reels・YouTube Shortsから、伸びている動画をピックアップする。自社業界に限定せず、構造が面白い動画を幅広く集める。数が多いほど分析の精度が上がるので、余裕があれば10〜20本でもOK。",
-        tips: [
-          "収集基準：① 冒頭で手が止まる ② 保存・コメントが多い ③ 商品紹介が自然 ④ 違和感・笑い・驚きがある ⑤ 自社商品に置き換えられそう",
-          "最低5本、余裕があれば10〜20本を目指す",
-          "スプレッドシートにURL・再生数・保存数・選定理由を記録",
-        ],
-      },
-      {
-        id: "1-2",
-        title: "各動画のスクリプトを書き起こす",
-        owners: ["analyst", "research"],
-        detail: "動画の音声をテキスト化する。Whisper等の音声認識ツールを活用すると効率的。画面の流れも簡単にメモする。",
-        tips: [
-          "完璧な書き起こしは不要、要点が分かればOK",
-          "画面キャプチャ3〜5枚を添えるとAI分析の精度が上がる",
-          "書き起こしツール例：Whisper、YouTube字幕、手動メモ",
-        ],
-      },
-      {
-        id: "1-3",
-        title: "AIで構造分析を実行する",
-        owners: ["analyst"],
-        detail: "プロンプトテンプレートに書き起こし＋キャプチャを入力し、5つの観点で分析する。① 冒頭1秒で止まる理由 ② 続きを見たくなる理由 ③ 感情が動くポイント ④ 転用できる構造 ⑤ 真似ると危険な表面要素。",
-        tips: [
-          "1本あたり5〜10分が目安",
-          "分析結果はスプレッドシートの別シートに記録",
-          "パターン分類（違和感型・Before/After型・検証型・あるある型・擬人化型・失敗回避型・逆張り型）を付与する",
-        ],
-      },
-    ],
-  },
-  {
-    id: "phase2",
-    day: "火曜",
-    dayShort: "TUE",
-    icon: "✏️",
-    title: "型を選定＋企画案を作成",
-    deliverable: "採用する型＋企画案リスト（3本〜）",
-    deliverableKey: "link_phase2",
-    completionCriteria: "各企画案にタイトル・冒頭の引き・展開概要・商品の出し方・検証仮説が記載されていること",
-    criteriaRef: "type_selection",
-    tasks: [
-      {
-        id: "2-1",
-        title: "今週使う型を選定する（1〜3個）",
-        owners: ["director", "analyst"],
-        detail: "月曜の分析結果から、今週の動画に使う型を選ぶ。前週に効果があった型の横展開、または新しく試したい型を選定する。勝ちパターンライブラリも参照する。",
-        tips: [
-          "まだライブラリが薄い初期は、毎週新しい型を試すのが効率的",
-          "前週の数値が良かった型は積極的に再利用する",
-          "余裕があれば3個以上選んでもOK",
-        ],
-      },
-      {
-        id: "2-2",
-        title: "企画案を作成する（3本〜）",
-        owners: ["analyst", "creator"],
-        detail: "選んだ各型について企画案を作成する。各企画案にはタイトル、冒頭の引き、展開概要、商品の出し方、想定する視聴者の反応、検証仮説を記載する。",
-        tips: [
-          "AIに「この構造で自社商品Xの動画案を3つ出して」と依頼するのも有効",
-          "完璧な脚本は不要、A4半ページ程度でOK",
-          "型が多ければ企画案も増やしてOK（目安：型の数×2〜3本）",
-        ],
-      },
-      {
-        id: "2-3",
-        title: "生成前チェックを実施する",
-        owners: ["director"],
-        detail: "各企画案を5つの観点で確認する：① 元動画に寄せすぎていないか ② ブランド文脈に自然に接続できているか ③ 視聴者にとって見る理由があるか ④ 商品訴求が唐突でないか ⑤ 検証仮説が明確か。",
-        tips: [
-          "特に①は重要。構造は活かしつつ、見た目は完全に別物にする",
-          "「この動画で検証したいこと」が1行で言えない企画は練り直す",
-        ],
-      },
-    ],
-  },
-  {
-    id: "phase3",
-    day: "水曜",
-    dayShort: "WED",
-    icon: "🎬",
-    title: "TopViewで動画制作＋レビュー",
-    deliverable: "完成動画（2本〜）",
-    deliverableKey: "link_phase3",
-    completionCriteria: "2本以上の動画が完成し、ブランドチェック済み、各動画に検証仮説がタグ付けされていること",
-    tasks: [
-      {
-        id: "3-1",
-        title: "TopViewで動画を生成する（2本〜）",
-        owners: ["creator"],
-        detail: "火曜の企画案から優先度の高いものを選び、TopView Video Agentで生成する。参考動画のリズム・構図・カメラワーク・編集テンポを入力し、自社商品向けに生成する。",
-        tips: [
-          "1本あたり2〜3回生成して最も良いものを選ぶ",
-          "余裕があれば5本以上生成してもOK",
-          "テスト投稿用なので完璧を目指さない",
-        ],
-      },
-      {
-        id: "3-2",
-        title: "レビュー＋最終編集する",
-        owners: ["director", "creator", "approver"],
-        detail: "生成動画をチームでレビュー：① ブランドイメージに合っているか ② 元動画に寄せすぎていないか ③ 不快感や誤解を与えないか ④ 商品訴求が自然か。テロップ修正・BGM差し替え・不要シーンカットを実施する。",
-        tips: [
-          "法務チェックが必要な場合はこの段階で依頼",
-          "15〜30分のレビュー会で一括確認するのが効率的",
-        ],
-      },
-      {
-        id: "3-3",
-        title: "検証仮説をタグ付けする",
-        owners: ["marketer", "analyst"],
-        detail: "各完成動画に検証仮説を明記する。例：「違和感型の冒頭は離脱率を下げるか」「擬人化型は保存率が高いか」。スプレッドシートに仮説列で記録する。",
-        tips: [
-          "仮説がない動画は学びにつながらない",
-          "先週の結果を踏まえた仮説にすると精度が上がる",
-        ],
-      },
-    ],
-  },
-  {
-    id: "phase4",
-    day: "木曜",
-    dayShort: "THU",
-    icon: "📤",
-    title: "投稿＋先週の数値を確認",
-    deliverable: "投稿済み動画＋先週分のKPIデータ",
-    deliverableKey: "link_phase4",
-    completionCriteria: "今週の動画が投稿され、先週の投稿分のKPIがスプレッドシートに記録されていること",
-    tasks: [
-      {
-        id: "4-1",
-        title: "今週の動画を投稿する",
-        owners: ["creator", "marketer"],
-        detail: "完成動画を各プラットフォームに投稿する。複数本ある場合は時間を分散させる。投稿時間はターゲット層がアクティブな時間帯に合わせる。",
-        tips: [
-          "各プラットフォームに最適化した形式（縦横比・長さ等）で投稿",
-          "同じ型の動画は連続投稿を避ける",
-          "投稿時刻・プラットフォーム・ハッシュタグも記録しておく",
-        ],
-      },
-      {
-        id: "4-2",
-        title: "先週の投稿分のKPIを記録する",
-        owners: ["marketer"],
-        detail: "先週投稿した動画のKPIをスプレッドシートに記録する：冒頭離脱率、平均視聴時間、視聴維持率、完了率、保存数・共有数、コメント内容、クリック率、CV数。",
-        tips: [
-          "コメント内容は感情の種類（笑い/驚き/共感/批判等）を分類して記録",
-          "投稿から1週間経過した数値が比較しやすい",
-          "数値が低くても「学び」として記録する（何が刺さらなかったか）",
-        ],
-      },
-      {
-        id: "4-3",
-        title: "構造×反応の対応を記録する",
-        owners: ["marketer", "analyst"],
-        detail: "先週の結果について「どの型がどのKPIを生んだか」を記録する。型ごとの傾向を蓄積していく。",
-        tips: [
-          "再生数だけでなく「保存率」「完了率」を重視する",
-          "週単位のサンプルは少ないので、4週分溜まったら傾向を分析する",
-        ],
-      },
-    ],
-  },
-  {
-    id: "phase5",
-    day: "金曜",
-    dayShort: "FRI",
-    icon: "📊",
-    title: "振り返り＋ライブラリ更新",
-    deliverable: "週次メモ＋ライブラリ更新",
-    deliverableKey: "link_phase5",
-    completionCriteria: "今週の学びが記録され、翌週の方針が決まっていること",
-    criteriaRef: "win_criteria",
-    tasks: [
-      {
-        id: "5-1",
-        title: "今週の振り返りをする（5〜15分）",
-        owners: ["director", "marketer"],
-        detail: "今週の活動を簡単に振り返る。うまくいったこと、改善点、来週試したいことを3行メモで記録する。チーム全員でやる必要はなく、ディレクター＋マーケ担当で十分。",
-        tips: [
-          "重くしない。3行メモで十分",
-          "「来週もこの型を使うか、新しい型を試すか」を決めるのが最重要",
-          "月末には週次メモをまとめて月次レビューにする",
-        ],
-      },
-      {
-        id: "5-2",
-        title: "勝ちパターンライブラリを更新する",
-        owners: ["analyst"],
-        detail: "先週の数値結果をもとに、勝ちパターンライブラリを更新する。効果があった型はテンプレート化し、効果がなかった型は理由を記録する。",
-        tips: [
-          "更新は5分で終わるレベルでOK。大きな更新は月末にまとめて行う",
-          "プロンプトテンプレートも効果があったものはバージョンアップする",
-          "蓄積が4週分溜まったら、月次レビューで全体傾向を分析する",
-        ],
-      },
-      {
-        id: "5-3",
-        title: "来週の方針を決める",
-        owners: ["director"],
-        detail: "来週の月曜に向けて方針をメモする：① 収集する動画の方向性（新しいジャンル？同じジャンルを深掘り？） ② 試したい型 ③ 検証したい仮説。",
-        tips: [
-          "金曜に1行メモするだけで月曜の立ち上がりが早くなる",
-          "トレンド変化があれば、来週の収集対象に反映する",
-        ],
-      },
-    ],
-  },
-];
+const MODE_ORDER = ["initial", "weekly", "monthly"];
 
 /* ──────────────────────────────────────────────
    WEEK HELPERS
    ────────────────────────────────────────────── */
+// ローカル時刻ベースで YYYY-MM-DD を返す。
+// 旧実装の toISOString().split("T")[0] は JST 月曜00:00 が UTC で日曜になる問題があったため修正。
+function formatLocalDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function getWeekKey(date) {
   const d = new Date(date);
   const day = d.getDay();
   const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  return monday.toISOString().split("T")[0];
+  const monday = new Date(d);
+  monday.setDate(diff);
+  monday.setHours(0, 0, 0, 0);
+  return formatLocalDate(monday);
 }
 
 function formatWeekLabel(weekKey) {
@@ -285,20 +62,115 @@ function formatWeekLabel(weekKey) {
   return `${fmt(mon)}〜${fmt(fri)}`;
 }
 
-/* ──────────────────────────────────────────────
-   STORAGE
-   ────────────────────────────────────────────── */
-const STORAGE_KEY = "topview_weekly_state";
-
-function loadState() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
+function shortWeekLabel(weekKey) {
+  const mon = new Date(weekKey + "T00:00:00");
+  return `${mon.getMonth() + 1}/${mon.getDate()}週`;
 }
 
-function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+/* ──────────────────────────────────────────────
+   STORAGE KEYS
+   ────────────────────────────────────────────── */
+const LEGACY_KEY = "topview_weekly_state";
+const MIGRATED_FLAG = "topviewMigrated_v2";
+
+// Mode-scoped key. For weekly mode, weekKey is appended.
+function modeKey(prefix, mode, weekKey) {
+  if (mode === "weekly" && weekKey) return `${prefix}_${mode}_${weekKey}`;
+  return `${prefix}_${mode}`;
+}
+
+const KEY = {
+  status: (mode, weekKey) => modeKey("topviewTodoStatus", mode, weekKey),
+  links: (mode, weekKey) => modeKey("topviewDeliverableLinks", mode, weekKey),
+  expanded: (mode, weekKey) => modeKey("topviewExpanded", mode, weekKey),
+  notes: (mode, weekKey) => modeKey("topviewNotes", mode, weekKey),
+};
+const META = {
+  mode: "topviewCurrentMode",
+  week: "topviewCurrentWeek",
+  showRoles: "topviewShowRoles",
+};
+
+function loadJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+}
+function loadString(key, fallback) {
+  try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function saveString(key, value) {
+  try { localStorage.setItem(key, value); } catch {}
+}
+
+/* ──────────────────────────────────────────────
+   LEGACY MIGRATION
+   旧 topview_weekly_state を週次モードの各週キーに展開する
+   ────────────────────────────────────────────── */
+function migrateLegacyIfNeeded() {
+  try {
+    if (localStorage.getItem(MIGRATED_FLAG)) return;
+    const raw = localStorage.getItem(LEGACY_KEY);
+    if (!raw) {
+      localStorage.setItem(MIGRATED_FLAG, "1");
+      return;
+    }
+    const legacy = JSON.parse(raw);
+    if (legacy && typeof legacy === "object") {
+      const currentWeek = legacy.currentWeek || getWeekKey(new Date());
+
+      // パターンA：weeks 入れ子構造（旧App.jsxの構造）
+      const weeks = legacy.weeks || {};
+      Object.entries(weeks).forEach(([wk, data]) => {
+        if (!wk || !data) return;
+        if (data.statuses && Object.keys(data.statuses).length > 0) {
+          saveJSON(KEY.status("weekly", wk), data.statuses);
+        }
+        if (data.links && Object.keys(data.links).length > 0) {
+          saveJSON(KEY.links("weekly", wk), data.links);
+        }
+        if (data.notes) {
+          saveString(KEY.notes("weekly", wk), data.notes);
+        }
+      });
+
+      // パターンB：root直下に statuses / links / notes があるさらに古い構造へのフォールバック
+      // （手動編集や前々世代の互換のための保険）
+      if (legacy.statuses && typeof legacy.statuses === "object" && Object.keys(legacy.statuses).length > 0) {
+        const target = KEY.status("weekly", currentWeek);
+        if (!localStorage.getItem(target)) saveJSON(target, legacy.statuses);
+      }
+      if (legacy.links && typeof legacy.links === "object" && Object.keys(legacy.links).length > 0) {
+        const target = KEY.links("weekly", currentWeek);
+        if (!localStorage.getItem(target)) saveJSON(target, legacy.links);
+      }
+      if (legacy.notes && typeof legacy.notes === "string") {
+        const target = KEY.notes("weekly", currentWeek);
+        if (!localStorage.getItem(target)) saveString(target, legacy.notes);
+      }
+
+      // expandedPhases / expandedTasks は現在週分として引き継ぐ
+      const expanded = { ...(legacy.expandedPhases || {}), ...(legacy.expandedTasks || {}) };
+      if (Object.keys(expanded).length > 0) {
+        saveJSON(KEY.expanded("weekly", currentWeek), expanded);
+      }
+      if (legacy.currentWeek) saveString(META.week, legacy.currentWeek);
+      if (typeof legacy.showRoles === "boolean") saveJSON(META.showRoles, legacy.showRoles);
+    }
+    localStorage.setItem(MIGRATED_FLAG, "1");
+  } catch {
+    try { localStorage.setItem(MIGRATED_FLAG, "1"); } catch {}
+  }
+}
+
+// モジュールロード時に1回だけ実行（フラグでガード済み）。
+// useStateのlazy initializerが「移行済みの新キー」を読めるようにする。
+if (typeof window !== "undefined") {
+  migrateLegacyIfNeeded();
 }
 
 /* ──────────────────────────────────────────────
@@ -311,7 +183,6 @@ function ChevronDown({ open }) {
     </svg>
   );
 }
-
 function CheckIcon({ size = 14 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none">
@@ -319,7 +190,6 @@ function CheckIcon({ size = 14 }) {
     </svg>
   );
 }
-
 function LinkIcon() {
   return (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
@@ -327,7 +197,6 @@ function LinkIcon() {
     </svg>
   );
 }
-
 function ArrowIcon({ dir }) {
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -390,132 +259,335 @@ const DAY_COLORS = {
   FRI: { bg: "#8b5cf6", light: "#faf5ff" },
 };
 
+// Mode-specific theme color (used when day color is absent)
+const MODE_THEME = {
+  initial: { bg: "#6366f1", light: "#eef2ff" },
+  weekly: { bg: "#0ea5e9", light: "#ecfeff" },
+  monthly: { bg: "#8b5cf6", light: "#faf5ff" },
+};
+
 /* ──────────────────────────────────────────────
    MAIN APP
    ────────────────────────────────────────────── */
 export default function App() {
-  const [state, setState] = useState(() => {
-    const saved = loadState();
-    const currentWeek = getWeekKey(new Date());
-    return saved || {
-      currentWeek,
-      weeks: {},
-      expandedPhases: { phase1: true },
-      expandedTasks: {},
-      showRoles: false,
-    };
+  // 現在モード（lazy init）
+  const [mode, setMode] = useState(() => {
+    const m = loadString(META.mode, "initial");
+    return MODES[m] ? m : "initial";
   });
+  useEffect(() => { saveString(META.mode, mode); }, [mode]);
 
-  useEffect(() => { saveState(state); }, [state]);
-
-  const update = useCallback((fn) => setState((prev) => {
-    const next = JSON.parse(JSON.stringify(prev));
-    fn(next);
-    return next;
-  }), []);
-
-  const weekKey = state.currentWeek || getWeekKey(new Date());
-  const weekData = state.weeks?.[weekKey] || { statuses: {}, links: {}, notes: "" };
-
-  const setWeekField = (field, id, val) => update((s) => {
-    if (!s.weeks[weekKey]) s.weeks[weekKey] = { statuses: {}, links: {}, notes: "" };
-    s.weeks[weekKey][field] = { ...s.weeks[weekKey][field], [id]: val };
+  // 現在の週（週次モードのみ使用、lazy init）
+  const [weekKey, setWeekKey] = useState(() => {
+    const w = loadString(META.week, "");
+    return w || getWeekKey(new Date());
   });
+  useEffect(() => { saveString(META.week, weekKey); }, [weekKey]);
 
-  const setStatus = (id, val) => setWeekField("statuses", id, val);
-  const setLink = (key, url) => setWeekField("links", key, url);
-  const togglePhase = (id) => update((s) => { s.expandedPhases[id] = !s.expandedPhases[id]; });
-  const toggleTask = (id) => update((s) => { s.expandedTasks[id] = !s.expandedTasks[id]; });
-  const toggleRoles = () => update((s) => { s.showRoles = !s.showRoles; });
+  // 担当ロール表示トグル
+  const [showRoles, setShowRoles] = useState(() => loadJSON(META.showRoles, false));
+  useEffect(() => { saveJSON(META.showRoles, showRoles); }, [showRoles]);
 
-  const changeWeek = (offset) => update((s) => {
-    const d = new Date(s.currentWeek + "T00:00:00");
-    d.setDate(d.getDate() + offset * 7);
-    s.currentWeek = getWeekKey(d);
+  // 現在モードのlocalStorageキーを構築するためのコンテキスト
+  const ctxWeek = mode === "weekly" ? weekKey : null;
+
+  // モード別ステート（statuses, links, expanded, notes）
+  // lazy init で localStorage から直接読む。初回マウント時の「空オブジェクト上書き」問題を回避。
+  const [statuses, setStatuses] = useState(() => loadJSON(KEY.status(mode, ctxWeek), {}));
+  const [links, setLinks] = useState(() => loadJSON(KEY.links(mode, ctxWeek), {}));
+  const [expanded, setExpanded] = useState(() => {
+    const exp = loadJSON(KEY.expanded(mode, ctxWeek), null);
+    if (exp) return exp;
+    const firstPhaseId = MODES[mode].phases[0]?.id;
+    return firstPhaseId ? { [firstPhaseId]: true } : {};
   });
+  const [notes, setNotes] = useState(() => loadString(KEY.notes(mode, ctxWeek), ""));
 
-  const goToThisWeek = () => update((s) => { s.currentWeek = getWeekKey(new Date()); });
+  // 「現在ロード済みのキー」を ref で追跡。
+  // モード/週切替時のロード処理が完了するまで、保存を行わないようにする。
+  const dataKey = mode === "weekly" ? `weekly|${weekKey}` : mode;
+  const dataKeyRef = useRef(dataKey);
 
-  const totalTasks = PHASES.reduce((sum, p) => sum + p.tasks.length, 0);
-  const completedTasks = PHASES.reduce((sum, p) =>
-    sum + p.tasks.filter((t) => weekData.statuses?.[t.id] === "done").length, 0);
-  const inProgressTasks = PHASES.reduce((sum, p) =>
-    sum + p.tasks.filter((t) => weekData.statuses?.[t.id] === "doing").length, 0);
-  const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-  const isCurrentWeek = weekKey === getWeekKey(new Date());
-  const weekLabel = formatWeekLabel(weekKey);
-
-  const weekKeys = Object.keys(state.weeks || {}).filter(k => {
-    const w = state.weeks[k];
-    return w && (Object.keys(w.statuses || {}).length > 0 || w.notes);
-  }).sort();
-  const weekIdx = weekKeys.indexOf(weekKey);
-  const weekNumber = weekIdx >= 0 ? weekIdx + 1 : weekKeys.length + 1;
-
-  const resetWeek = () => {
-    if (confirm(`${weekLabel} の進捗をリセットしますか？`)) {
-      update((s) => { delete s.weeks[weekKey]; });
+  // モード or 週が変わったときに新キーからロードする
+  // （changeMode/changeWeek 経由なら loadDataFor で先回りされているが、外部から setMode/setWeekKey が呼ばれた場合の保険として残す）
+  useEffect(() => {
+    if (dataKeyRef.current === dataKey) return; // 同じキー、何もしない
+    setStatuses(loadJSON(KEY.status(mode, ctxWeek), {}));
+    setLinks(loadJSON(KEY.links(mode, ctxWeek), {}));
+    const exp = loadJSON(KEY.expanded(mode, ctxWeek), null);
+    if (exp) {
+      setExpanded(exp);
+    } else {
+      const firstPhaseId = MODES[mode].phases[0]?.id;
+      setExpanded(firstPhaseId ? { [firstPhaseId]: true } : {});
     }
+    setNotes(loadString(KEY.notes(mode, ctxWeek), ""));
+    dataKeyRef.current = dataKey;
+  }, [mode, ctxWeek, dataKey]);
+
+  /* ── 同期ロード関数（モード/週切替時に setMode/setWeekKey と同じバッチで state を更新する） ── */
+  const loadDataFor = useCallback((nextMode, nextWeekKey) => {
+    const nextCtxWeek = nextMode === "weekly" ? nextWeekKey : null;
+    setStatuses(loadJSON(KEY.status(nextMode, nextCtxWeek), {}));
+    setLinks(loadJSON(KEY.links(nextMode, nextCtxWeek), {}));
+    const exp = loadJSON(KEY.expanded(nextMode, nextCtxWeek), null);
+    if (exp) {
+      setExpanded(exp);
+    } else {
+      const firstPhaseId = MODES[nextMode].phases[0]?.id;
+      setExpanded(firstPhaseId ? { [firstPhaseId]: true } : {});
+    }
+    setNotes(loadString(KEY.notes(nextMode, nextCtxWeek), ""));
+    dataKeyRef.current = nextMode === "weekly" ? `weekly|${nextWeekKey}` : nextMode;
+  }, []);
+
+  /* ── Actions（state更新と localStorage 保存を不可分に行う） ── */
+  // setter は useCallback の依存配列に [mode, ctxWeek] を持つため、モード/週切替後は新しい mode/ctxWeek を持つ関数が再生成される。
+  // changeMode/changeWeek 経由なら state も同期的に更新されるので、次回 setter 呼び出しは正しいキーへ書き込む。
+  const setStatus = useCallback((taskId, val) => {
+    setStatuses((s) => {
+      const next = { ...s, [taskId]: val };
+      saveJSON(KEY.status(mode, ctxWeek), next);
+      return next;
+    });
+  }, [mode, ctxWeek]);
+
+  const setLink = useCallback((deliverableKey, url) => {
+    setLinks((s) => {
+      const next = { ...s, [deliverableKey]: url };
+      saveJSON(KEY.links(mode, ctxWeek), next);
+      return next;
+    });
+  }, [mode, ctxWeek]);
+
+  const toggle = useCallback((id) => {
+    setExpanded((s) => {
+      const next = { ...s, [id]: !s[id] };
+      saveJSON(KEY.expanded(mode, ctxWeek), next);
+      return next;
+    });
+  }, [mode, ctxWeek]);
+
+  const updateNotes = useCallback((val) => {
+    setNotes(val);
+    saveString(KEY.notes(mode, ctxWeek), val);
+  }, [mode, ctxWeek]);
+
+  /* ── モード/週切替（state を同期ロードしてから set する） ── */
+  const changeMode = useCallback((nextMode) => {
+    if (nextMode === mode) return;
+    loadDataFor(nextMode, weekKey);
+    setMode(nextMode);
+  }, [mode, weekKey, loadDataFor]);
+
+  const changeWeek = useCallback((offset) => {
+    const d = new Date(weekKey + "T00:00:00");
+    d.setDate(d.getDate() + offset * 7);
+    const nextWeek = getWeekKey(d);
+    if (nextWeek === weekKey) return;
+    if (mode === "weekly") {
+      loadDataFor("weekly", nextWeek);
+    }
+    setWeekKey(nextWeek);
+  }, [mode, weekKey, loadDataFor]);
+
+  const goToThisWeek = useCallback(() => {
+    const nextWeek = getWeekKey(new Date());
+    if (nextWeek === weekKey) return;
+    if (mode === "weekly") {
+      loadDataFor("weekly", nextWeek);
+    }
+    setWeekKey(nextWeek);
+  }, [mode, weekKey, loadDataFor]);
+
+  const currentModeDef = MODES[mode];
+  const isCurrentWeek = weekKey === getWeekKey(new Date());
+
+  /* ── 各モードの進捗を計算（タブ用） ── */
+  const progressByMode = useMemo(() => {
+    const out = {};
+    for (const m of MODE_ORDER) {
+      const phases = MODES[m].phases;
+      const total = phases.reduce((sum, p) => sum + p.tasks.length, 0);
+      let st = {};
+      if (m === mode) {
+        // 現在モードはステートから（即時反映のため）
+        st = statuses;
+      } else if (m === "weekly") {
+        st = loadJSON(KEY.status("weekly", weekKey), {});
+      } else {
+        st = loadJSON(KEY.status(m, null), {});
+      }
+      const done = phases.reduce(
+        (sum, p) => sum + p.tasks.filter((t) => st[t.id] === "done").length, 0
+      );
+      out[m] = { done, total };
+    }
+    return out;
+  }, [statuses, weekKey, mode]);
+
+  /* ── 現在モードの進捗 ── */
+  const totalTasks = currentModeDef.phases.reduce((sum, p) => sum + p.tasks.length, 0);
+  const completedTasks = currentModeDef.phases.reduce(
+    (sum, p) => sum + p.tasks.filter((t) => statuses[t.id] === "done").length, 0
+  );
+  const inProgressTasks = currentModeDef.phases.reduce(
+    (sum, p) => sum + p.tasks.filter((t) => statuses[t.id] === "doing").length, 0
+  );
+  const progress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+  const allComplete = totalTasks > 0 && completedTasks === totalTasks;
+
+  /* ── リセット ── */
+  const resetCurrent = () => {
+    const label =
+      mode === "weekly" ? `${shortWeekLabel(weekKey)}（週次運用）` :
+      mode === "initial" ? "初月PoC" : "月次レビュー";
+    if (!confirm(`${label} の進捗・リンク・メモをリセットしますか？`)) return;
+    setStatuses({});
+    setLinks({});
+    setNotes("");
+    saveJSON(KEY.status(mode, ctxWeek), {});
+    saveJSON(KEY.links(mode, ctxWeek), {});
+    saveString(KEY.notes(mode, ctxWeek), "");
+    // expanded は意図的に維持（UIの好みは残す）
   };
+
+  const themeColor = MODE_THEME[mode];
 
   return (
     <div style={{ maxWidth: 780, margin: "0 auto", padding: "28px 16px 60px" }}>
       {/* ── HEADER ── */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
           <span style={{ fontSize: 30 }}>🎬</span>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 900, margin: 0, letterSpacing: "-0.02em" }}>
-              TopView ショート動画制作
+              Topview ショート動画制作
             </h1>
-            <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>週次サイクル — 月〜金 5ステップ Todo & 手順書</p>
+            <p style={{ fontSize: 12, color: "#888", margin: "2px 0 0" }}>
+              {currentModeDef.subtitle}
+            </p>
           </div>
         </div>
       </div>
 
-      {/* ── WEEK SELECTOR ── */}
+      {/* ── MODE TABS ── */}
       <div style={{
-        background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 12,
-        boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between",
+        background: "#fff", borderRadius: 14, padding: 6, marginBottom: 14,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4,
       }}>
-        <button onClick={() => changeWeek(-1)} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4, display: "flex" }}>
-          <ArrowIcon dir="left" />
-        </button>
-        <div style={{ textAlign: "center" }}>
-          <div style={{ fontSize: 18, fontWeight: 800, color: "#1a1a2e" }}>{weekLabel}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginTop: 2 }}>
-            <span style={{ fontSize: 11, color: "#999" }}>Week {weekNumber}</span>
-            {isCurrentWeek && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#f0fdf4", padding: "1px 8px", borderRadius: 10 }}>今週</span>
-            )}
-          </div>
-        </div>
-        <button onClick={() => changeWeek(1)} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4, display: "flex" }}>
-          <ArrowIcon dir="right" />
-        </button>
+        {MODE_ORDER.map((m) => {
+          const def = MODES[m];
+          const prog = progressByMode[m];
+          const isActive = mode === m;
+          const isComplete = prog.total > 0 && prog.done === prog.total;
+          const activeColor = MODE_THEME[m].bg;
+          return (
+            <button
+              key={m}
+              onClick={() => changeMode(m)}
+              style={{
+                border: "none", borderRadius: 10, padding: "10px 8px", cursor: "pointer",
+                background: isActive ? activeColor : "transparent",
+                color: isActive ? "#fff" : "#666",
+                transition: "all 0.2s",
+                fontFamily: "inherit",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 3,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{def.label}</span>
+                {isComplete && m === "initial" && (
+                  <span style={{
+                    fontSize: 9, fontWeight: 800,
+                    color: isActive ? activeColor : "#16a34a",
+                    background: isActive ? "#fff" : "#f0fdf4",
+                    padding: "1px 5px", borderRadius: 8, whiteSpace: "nowrap",
+                  }}>
+                    ✓ 完了
+                  </span>
+                )}
+              </div>
+              <span style={{
+                fontSize: 10, fontWeight: 600,
+                color: isActive ? "rgba(255,255,255,0.85)" : "#999",
+              }}>
+                {prog.done}/{prog.total}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
-      {!isCurrentWeek && (
-        <div style={{ textAlign: "center", marginBottom: 12 }}>
-          <button onClick={goToThisWeek} style={{
-            fontSize: 12, fontWeight: 600, color: "#6366f1", background: "#eef2ff",
-            border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer",
-          }}>
-            📅 今週に戻る
-          </button>
+      {/* ── COMPLETED BADGE (initial mode only) ── */}
+      {mode === "initial" && allComplete && (
+        <div style={{
+          background: "linear-gradient(135deg, #16a34a, #15803d)",
+          color: "#fff", borderRadius: 12, padding: "12px 16px", marginBottom: 14,
+          display: "flex", alignItems: "center", gap: 10,
+          boxShadow: "0 2px 8px rgba(22, 163, 74, 0.25)",
+        }}>
+          <span style={{ fontSize: 22 }}>🎉</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 800 }}>初月PoC 完了済み</div>
+            <div style={{ fontSize: 11, opacity: 0.9, marginTop: 1 }}>
+              立ち上げお疲れさまでした。以降は「週次運用」モードで毎週の検証を回しましょう。
+            </div>
+          </div>
         </div>
+      )}
+
+      {/* ── WEEK SELECTOR (weekly mode only) ── */}
+      {mode === "weekly" && (
+        <>
+          <div style={{
+            background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 12,
+            boxShadow: "0 1px 3px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <button onClick={() => changeWeek(-1)} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4, display: "flex" }}>
+              <ArrowIcon dir="left" />
+            </button>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#1a1a2e" }}>
+                {formatWeekLabel(weekKey)}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "center", marginTop: 2 }}>
+                <span style={{ fontSize: 11, color: "#999" }}>{weekKey}</span>
+                {isCurrentWeek && (
+                  <span style={{ fontSize: 10, fontWeight: 700, color: "#16a34a", background: "#f0fdf4", padding: "1px 8px", borderRadius: 10 }}>今週</span>
+                )}
+              </div>
+            </div>
+            <button onClick={() => changeWeek(1)} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4, display: "flex" }}>
+              <ArrowIcon dir="right" />
+            </button>
+          </div>
+          {!isCurrentWeek && (
+            <div style={{ textAlign: "center", marginBottom: 12 }}>
+              <button onClick={goToThisWeek} style={{
+                fontSize: 12, fontWeight: 600, color: "#6366f1", background: "#eef2ff",
+                border: "none", borderRadius: 6, padding: "5px 14px", cursor: "pointer",
+                fontFamily: "inherit",
+              }}>
+                📅 今週に戻る
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* ── PROGRESS ── */}
       <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#444" }}>今週の進捗</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#444" }}>
+            {mode === "weekly" ? "今週の進捗" : mode === "initial" ? "初月の進捗" : "今月の進捗"}
+          </span>
           <div style={{ display: "flex", gap: 14, alignItems: "baseline" }}>
             {inProgressTasks > 0 && (
               <span style={{ fontSize: 12, color: "#f59e0b", fontWeight: 600 }}>🔄 {inProgressTasks}</span>
             )}
-            <span style={{ fontSize: 24, fontWeight: 800, color: progress === 100 ? "#16a34a" : "#6366f1" }}>
+            <span style={{ fontSize: 24, fontWeight: 800, color: progress === 100 ? "#16a34a" : themeColor.bg }}>
               {completedTasks}<span style={{ fontSize: 13, fontWeight: 500, color: "#999" }}>/{totalTasks}</span>
             </span>
           </div>
@@ -523,53 +595,57 @@ export default function App() {
         <div style={{ height: 7, background: "#e5e7eb", borderRadius: 4, overflow: "hidden" }}>
           <div style={{
             height: "100%", borderRadius: 4, transition: "width 0.3s", width: `${progress}%`,
-            background: progress === 100 ? "#16a34a" : "linear-gradient(90deg, #6366f1, #8b5cf6)",
+            background: progress === 100 ? "#16a34a" : `linear-gradient(90deg, ${themeColor.bg}, #8b5cf6)`,
           }} />
         </div>
-        {/* Day dots */}
-        <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "center" }}>
-          {PHASES.map((phase) => {
-            const phaseDone = phase.tasks.every((t) => weekData.statuses?.[t.id] === "done");
-            const phaseStarted = phase.tasks.some((t) => weekData.statuses?.[t.id] === "doing" || weekData.statuses?.[t.id] === "done");
-            const dc = DAY_COLORS[phase.dayShort];
-            return (
-              <div key={phase.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 48 }}>
-                <div style={{
-                  width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 15,
-                  background: phaseDone ? dc.bg : phaseStarted ? dc.light : "#f3f4f6",
-                  color: phaseDone ? "#fff" : phaseStarted ? dc.bg : "#ccc",
-                  border: phaseDone ? "none" : `2px solid ${phaseStarted ? dc.bg : "#e5e7eb"}`,
-                  transition: "all 0.2s",
-                }}>
-                  {phaseDone ? <CheckIcon size={14} /> : phase.icon}
+        {/* Day dots (weekly mode only) */}
+        {mode === "weekly" && (
+          <div style={{ display: "flex", gap: 6, marginTop: 12, justifyContent: "center" }}>
+            {WEEKLY_PHASES.map((phase) => {
+              const phaseDone = phase.tasks.every((t) => statuses[t.id] === "done");
+              const phaseStarted = phase.tasks.some((t) => statuses[t.id] === "doing" || statuses[t.id] === "done");
+              const dc = DAY_COLORS[phase.dayShort];
+              return (
+                <div key={phase.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3, minWidth: 48 }}>
+                  <div style={{
+                    width: 34, height: 34, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 15,
+                    background: phaseDone ? dc.bg : phaseStarted ? dc.light : "#f3f4f6",
+                    color: phaseDone ? "#fff" : phaseStarted ? dc.bg : "#ccc",
+                    border: phaseDone ? "none" : `2px solid ${phaseStarted ? dc.bg : "#e5e7eb"}`,
+                    transition: "all 0.2s",
+                  }}>
+                    {phaseDone ? <CheckIcon size={14} /> : phase.icon}
+                  </div>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: phaseDone ? dc.bg : "#bbb" }}>{phase.day}</span>
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: phaseDone ? dc.bg : "#bbb" }}>{phase.day}</span>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* ── CONTROLS ── */}
       <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-        <button onClick={toggleRoles} style={{
+        <button onClick={() => setShowRoles((v) => !v)} style={{
           fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 8, cursor: "pointer",
-          border: "1px solid #e5e7eb", background: state.showRoles ? "#6366f1" : "#fff",
-          color: state.showRoles ? "#fff" : "#666",
+          border: "1px solid #e5e7eb", background: showRoles ? themeColor.bg : "#fff",
+          color: showRoles ? "#fff" : "#666",
+          fontFamily: "inherit",
         }}>
           👥 担当ロール表
         </button>
-        <button onClick={resetWeek} style={{
+        <button onClick={resetCurrent} style={{
           fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 8, cursor: "pointer",
           border: "1px solid #e5e7eb", background: "#fff", color: "#999",
+          fontFamily: "inherit",
         }}>
-          ↺ 今週をリセット
+          ↺ {mode === "weekly" ? `${shortWeekLabel(weekKey)}をリセット` : "このモードをリセット"}
         </button>
       </div>
 
       {/* ── ROLE TABLE ── */}
-      {state.showRoles && (
+      {showRoles && (
         <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", marginBottom: 20, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
           <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>👥 チーム体制</div>
           <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 16px" }}>
@@ -583,12 +659,7 @@ export default function App() {
                   <span style={{ fontSize: 13, fontWeight: 700, color: "#333" }}>{role.label}</span>
                 </div>
                 <div style={{ fontSize: 12, color: "#666", lineHeight: 1.6, padding: "2px 0" }}>
-                  {key === "director" && "全体設計、型の選定、レビュー"}
-                  {key === "research" && "バズ動画収集、数値記録"}
-                  {key === "analyst" && "書き起こし、構造分析、プロンプト作成"}
-                  {key === "creator" && "TopView生成、編集、投稿準備"}
-                  {key === "marketer" && "KPI設計、投稿結果分析"}
-                  {key === "approver" && "ブランド・法務・最終承認"}
+                  {role.description}
                 </div>
               </div>
             ))}
@@ -597,13 +668,14 @@ export default function App() {
       )}
 
       {/* ── PHASES ── */}
-      {PHASES.map((phase) => {
-        const phaseCompleted = phase.tasks.filter((t) => weekData.statuses?.[t.id] === "done").length;
+      {currentModeDef.phases.map((phase) => {
+        const phaseCompleted = phase.tasks.filter((t) => statuses[t.id] === "done").length;
         const phaseTotal = phase.tasks.length;
         const allDone = phaseCompleted === phaseTotal;
-        const isOpen = state.expandedPhases[phase.id];
-        const linkVal = weekData.links?.[phase.deliverableKey] || "";
-        const dc = DAY_COLORS[phase.dayShort];
+        const isOpen = !!expanded[phase.id];
+        const linkVal = links[phase.deliverableKey] || "";
+        const dc = phase.dayShort ? DAY_COLORS[phase.dayShort] : themeColor;
+        const headerLabel = phase.day || phase.stepLabel || "";
 
         return (
           <div key={phase.id} style={{
@@ -611,10 +683,11 @@ export default function App() {
             boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
             borderLeft: `4px solid ${allDone ? "#16a34a" : dc.bg}`,
           }}>
-            <button onClick={() => togglePhase(phase.id)} style={{
+            <button onClick={() => toggle(phase.id)} style={{
               width: "100%", display: "flex", alignItems: "center", gap: 12,
               padding: "14px 16px", border: "none", cursor: "pointer", textAlign: "left",
               background: allDone ? "#f0fdf4" : "#fafafe",
+              fontFamily: "inherit",
             }}>
               <div style={{
                 width: 38, height: 38, borderRadius: 10, display: "flex", flexDirection: "column",
@@ -624,13 +697,15 @@ export default function App() {
                 {allDone ? <CheckIcon size={16} /> : (
                   <>
                     <span style={{ fontSize: 14 }}>{phase.icon}</span>
-                    <span style={{ fontSize: 8, fontWeight: 800, lineHeight: 1, marginTop: 1 }}>{phase.dayShort}</span>
+                    {phase.dayShort && (
+                      <span style={{ fontSize: 8, fontWeight: 800, lineHeight: 1, marginTop: 1 }}>{phase.dayShort}</span>
+                    )}
                   </>
                 )}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, color: allDone ? "#16a34a" : dc.bg, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                  {phase.day}
+                  {headerLabel}
                 </div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#1a1a2e", lineHeight: 1.3 }}>{phase.title}</div>
               </div>
@@ -672,9 +747,9 @@ export default function App() {
                 )}
 
                 {phase.tasks.map((task) => {
-                  const status = weekData.statuses?.[task.id] || "todo";
+                  const status = statuses[task.id] || "todo";
                   const isDone = status === "done";
-                  const isTaskOpen = state.expandedTasks[task.id];
+                  const isTaskOpen = !!expanded[task.id];
 
                   return (
                     <div key={task.id} style={{
@@ -684,8 +759,9 @@ export default function App() {
                     }}>
                       <div style={{ display: "flex", alignItems: "flex-start", gap: 10, padding: "10px 12px" }}>
                         <StatusSelect value={status} onChange={(v) => setStatus(task.id, v)} />
-                        <button onClick={() => toggleTask(task.id)} style={{
+                        <button onClick={() => toggle(task.id)} style={{
                           flex: 1, background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0,
+                          fontFamily: "inherit",
                         }}>
                           <span style={{
                             fontSize: 14, fontWeight: 600, lineHeight: 1.5,
@@ -698,7 +774,7 @@ export default function App() {
                             {task.owners.map((o) => <RoleBadge key={o} roleKey={o} />)}
                           </div>
                         </button>
-                        <span style={{ color: "#ccc", flexShrink: 0, marginTop: 2, cursor: "pointer" }} onClick={() => toggleTask(task.id)}>
+                        <span style={{ color: "#ccc", flexShrink: 0, marginTop: 2, cursor: "pointer" }} onClick={() => toggle(task.id)}>
                           <ChevronDown open={isTaskOpen} />
                         </span>
                       </div>
@@ -726,16 +802,21 @@ export default function App() {
         );
       })}
 
-      {/* ── WEEKLY MEMO ── */}
+      {/* ── MEMO (モード共通) ── */}
       <div style={{ background: "#fff", borderRadius: 14, padding: "16px 20px", marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#555", marginBottom: 8 }}>📝 週次メモ</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#555", marginBottom: 8 }}>
+          📝 {mode === "weekly" ? "週次メモ" : mode === "initial" ? "初月メモ" : "月次メモ"}
+        </div>
         <textarea
-          value={weekData.notes || ""}
-          onChange={(e) => update((s) => {
-            if (!s.weeks[weekKey]) s.weeks[weekKey] = { statuses: {}, links: {}, notes: "" };
-            s.weeks[weekKey].notes = e.target.value;
-          })}
-          placeholder="今週の気づき、来週試したいこと、改善点などを自由にメモ..."
+          value={notes}
+          onChange={(e) => updateNotes(e.target.value)}
+          placeholder={
+            mode === "weekly"
+              ? "今週の気づき、来週試したいこと、改善点などを自由にメモ..."
+              : mode === "initial"
+                ? "初月の気づき、立ち上げ時の課題、引き継ぎたいことなどを自由にメモ..."
+                : "今月の全体傾向、来月の方針、長期的な課題などを自由にメモ..."
+          }
           style={{
             width: "100%", minHeight: 80, fontSize: 13, fontFamily: "inherit", lineHeight: 1.7,
             border: "1px solid #e5e7eb", borderRadius: 8, padding: "10px 12px", outline: "none",
@@ -744,18 +825,24 @@ export default function App() {
         />
       </div>
 
-      {/* ── CYCLE REMINDER ── */}
+      {/* ── MODE REMINDER ── */}
       <div style={{ marginTop: 20, padding: "16px 20px", background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#555", marginBottom: 6 }}>🔄 毎週このサイクルを回す</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#555", marginBottom: 6 }}>
+          {mode === "weekly" ? "🔄 毎週このサイクルを回す" :
+            mode === "initial" ? "🚀 初月で立ち上げる" : "📈 月次で勝ちパターンを蓄積"}
+        </div>
         <p style={{ fontSize: 12, color: "#888", lineHeight: 1.7, margin: 0 }}>
-          月→収集・分析 → 火→企画 → 水→制作 → 木→投稿・検証 → 金→振り返り・蓄積。
-          数が多いほど学習データが増えるので、チームのキャパが許す限り多く回す。
-          4週分溜まったら月次レビューで全体傾向を分析する。
+          {mode === "weekly" &&
+            "月→テーマ決め＋収集 → 火→分析・翻案 → 水→生成・レビュー → 木→投稿・KPI記録 → 金→48時間データ＋振り返り。4週分溜まったら月次レビューで全体傾向を分析する。"}
+          {mode === "initial" &&
+            "最初の1か月で「収集→分析→型選定→企画→生成→投稿検証→蓄積」の7ステップを通し、検証体制を立ち上げる。完了後は週次運用モードに移行する。"}
+          {mode === "monthly" &&
+            "1か月分の結果を集計し、効いた構造をライブラリ化して来月の検証テーマを決める。月末〜翌月初に実施する。"}
         </p>
       </div>
 
       <p style={{ textAlign: "center", fontSize: 11, color: "#ccc", marginTop: 20 }}>
-        進捗は週ごとにブラウザに自動保存されます
+        進捗はモードごと（週次は週ごと）にブラウザに自動保存されます
       </p>
     </div>
   );

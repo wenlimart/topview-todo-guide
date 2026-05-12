@@ -74,10 +74,10 @@ AI分析・生成に使うプロンプトをバージョン管理します。
 
 ---
 
-## 3. TopView用プロンプト（v1.0）
+## 3. Topview用プロンプト（v1.0）
 
 ### 用途
-TopView Video Agentに入力するプロンプト。
+Topview Video Agentに入力するプロンプト。
 
 ### プロンプト
 
